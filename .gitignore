@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+data
+out
+profile/cv.md
+profile/preferences.md
