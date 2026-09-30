@@ -1,4 +1,8 @@
-export type SourceName = "greenhouse" | "lever" | "ashby" | "remoteok";
+/** Company-specific ATS boards, polled per company slug. */
+export type BoardSource = "greenhouse" | "lever" | "ashby";
+/** Aggregators, polled once each. */
+export type FeedSource = "remoteok" | "himalayas" | "weworkremotely";
+export type SourceName = BoardSource | FeedSource;
 
 /** One normalized posting, whatever board it came from. */
 export interface Job {

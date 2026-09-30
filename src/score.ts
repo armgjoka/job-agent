@@ -8,12 +8,28 @@ import type { Job, Verdict } from "./types.js";
 const client = new Anthropic(); // reads ANTHROPIC_API_KEY
 const MODEL = process.env.SCORING_MODEL ?? "claude-sonnet-5";
 
+/**
+ * The tool schema asks for arrays of strings, but the model sometimes sends a single
+ * string or omits an empty list. Normalize instead of losing the whole verdict.
+ */
+const stringList = z.preprocess((v) => {
+  if (v == null) return [];
+  if (typeof v === "string") {
+    const lines = v
+      .split(/\r?\n|^\s*[-*•]\s*/m)
+      .map((s) => s.replace(/^\s*[-*•]\s*/, "").trim())
+      .filter(Boolean);
+    return lines.length > 1 ? lines : v.trim() ? [v.trim()] : [];
+  }
+  return v;
+}, z.array(z.string()));
+
 const VerdictSchema = z.object({
   score: z.number().min(0).max(100),
   location_eligible: z.enum(["yes", "no", "unclear"]),
   summary: z.string(),
-  reasons: z.array(z.string()),
-  red_flags: z.array(z.string()),
+  reasons: stringList,
+  red_flags: stringList,
 });
 
 function readProfile(file: string): string {

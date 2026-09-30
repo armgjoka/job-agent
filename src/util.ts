@@ -30,4 +30,13 @@ export async function getJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export async function getText(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "job-agent/0.1 (personal use)" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  return res.text();
+}
+
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

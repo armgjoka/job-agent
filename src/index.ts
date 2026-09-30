@@ -1,13 +1,15 @@
 import "dotenv/config";
-import { companies, scoring, useRemoteOk } from "./config.js";
+import { companies, scoring, useHimalayas, useRemoteOk, useWeWorkRemotely } from "./config.js";
 import { jobsAtStage, markFiltered, saveJobs, saveVerdict, setMyStatus } from "./db.js";
 import { buildDigest } from "./digest.js";
-import { hardFilter } from "./filter.js";
+import { hardFilter, pickDuplicates } from "./filter.js";
 import { scoreJob } from "./score.js";
 import { fetchAshby } from "./sources/ashby.js";
 import { fetchGreenhouse } from "./sources/greenhouse.js";
 import { fetchLever } from "./sources/lever.js";
+import { fetchHimalayas } from "./sources/himalayas.js";
 import { fetchRemoteOk } from "./sources/remoteok.js";
+import { fetchWeWorkRemotely } from "./sources/weworkremotely.js";
 import type { Job } from "./types.js";
 import { sleep } from "./util.js";
 
@@ -19,6 +21,8 @@ async function fetchAll(): Promise<void> {
     run: () => fetchers[c.source](c.slug, c.name),
   }));
   if (useRemoteOk) tasks.push({ label: "remoteok", run: fetchRemoteOk });
+  if (useHimalayas) tasks.push({ label: "himalayas", run: fetchHimalayas });
+  if (useWeWorkRemotely) tasks.push({ label: "weworkremotely", run: fetchWeWorkRemotely });
 
   for (const t of tasks) {
     try {
@@ -30,13 +34,18 @@ async function fetchAll(): Promise<void> {
     await sleep(500); // be polite
   }
 
-  let passed = 0;
-  for (const job of jobsAtStage("new", 1_000_000)) {
+  // Re-check everything still waiting, so edits to the filters apply to the existing queue too.
+  const survivors: Job[] = [];
+  for (const job of [...jobsAtStage("new", 1_000_000), ...jobsAtStage("passed", 1_000_000)]) {
     const reason = hardFilter(job);
-    markFiltered(job.id, reason);
-    if (!reason) passed++;
+    if (reason) markFiltered(job.id, reason);
+    else survivors.push(job);
   }
-  console.log(`filter: ${passed} passed to scoring`);
+  // Same role posted once per country: keep one, drop the rest.
+  const dupes = pickDuplicates(survivors);
+  for (const job of survivors) markFiltered(job.id, dupes.get(job.id) ?? null);
+  for (const [id, reason] of dupes) markFiltered(id, reason);
+  console.log(`filter: ${survivors.length - [...survivors].filter((j) => dupes.has(j.id)).length} passed to scoring, ${dupes.size} duplicates dropped`);
 }
 
 async function scoreAll(): Promise<void> {
